@@ -234,7 +234,7 @@ if uploaded_file is not None:
             writer.save()
             
             st.download_button(
-                label="Download Excel worksheets",
+                label="Télécharger les données en Excel",
                 data=buffer,
                 file_name="Resultats_SIRET.xlsx",
                 mime="application/vnd.ms-excel")
