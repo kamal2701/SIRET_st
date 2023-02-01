@@ -1,4 +1,3 @@
-# Travaux Digital Factory 2022
 # Kamal QUAZBARY
 
 # Pour plus d'informations, lire le fichier texte Streamlit app - Mode d'emploi.docx
@@ -7,10 +6,12 @@
 import streamlit as st
 import pandas as pd
 from api_insee import ApiInsee
-import math
 import numpy as np
 from PIL import Image
 import os
+import io
+
+buffer = io.BytesIO()
 
 
 informations = [
@@ -81,9 +82,8 @@ informations = [
 "Code pays pour un établissement situé à l’étranger",
 "Libellé du pays de l’adresse secondaire pour un établissement situé à l’étranger"]
 
-libelles = [
-    "etablissement_uniteLegale_denominationUniteLegale",
-    "etablissement_siren",
+libelles = ["etablissement_uniteLegale_denominationUniteLegale",
+"etablissement_siren",
 "etablissement_nic",
 "etablissement_siret",
 "etablissement_statutDiffusionEtablissement",
@@ -97,7 +97,6 @@ libelles = [
 "etablissement_uniteLegale_statutDiffusionUniteLegale",
 "etablissement_uniteLegale_dateCreationUniteLegale",
 "etablissement_uniteLegale_categorieJuridiqueUniteLegale",
-
 "etablissement_uniteLegale_sigleUniteLegale",
 "etablissement_uniteLegale_denominationUsuelle1UniteLegale",
 "etablissement_uniteLegale_denominationUsuelle2UniteLegale",
@@ -150,18 +149,19 @@ libelles = [
 "etablissement_adresse2Etablissement_codePaysEtranger2Etablissement",
 "etablissement_adresse2Etablissement_libellePaysEtranger2Etablissement"]
 
-mapping = pd.DataFrame({'libelles' : libelles, 'infos' : informations})
+mapping = pd.DataFrame({'libelles' : libelles, 'Attributs' : informations})
 mapping['index'] = mapping.index
 
-
+api = ApiInsee(
+    key = "SvyV5c0YqjcXJXEbVYCAh2ZVfCYa",
+    secret = "OzG82MAf_oL864QWoS1SCf4pmPwa")
 with st.sidebar.container():
     image = Image.open(os.path.join(os.getcwd(), 'digital.factory.png'))
 
     st.image(image)
     
-st.sidebar.title('Hello Practice Digitale !')
 
-st.sidebar.write('Voici une application construite sur Streamlit à propos des codes SIRET')
+st.sidebar.write('Application construite autour des codes SIRET')
 
 
 def flatten_dict(dd, separator ='_', prefix =''):
@@ -171,102 +171,72 @@ def flatten_dict(dd, separator ='_', prefix =''):
              } if isinstance(dd, dict) else { prefix : dd }
 
 
-def reglages():
-    st.subheader('Sélectionnez les informations que vous souhaitez extraire')
-    
-    
-    if st.button('Select All'):
-        for info in informations:
-            st.session_state['dynamic_checkbox_' + str(informations.index(info))] = True
-        st.experimental_rerun()
-    if st.button('UnSelect All'):
-        for info in informations:
-            st.session_state['dynamic_checkbox_' + str(informations.index(info))] = False
-        st.experimental_rerun()
-    
-    for info in informations:
-        st.checkbox(info, key='dynamic_checkbox_' + str(informations.index(info)), value = True)
-      
-    
+uploaded_file = st.sidebar.file_uploader("Insérez les SIRET dans la même colonne d'un fichier Excel vide")
 
+
+st.header("Extraction de données à partir de codes SIRET")    
     
-    for info in informations:
-        if 'dynamic_checkbox_' + str(informations.index(info)) not in st.session_state:
-            st.session_state['dynamic_checkbox_' + str(informations.index(info))] = True
+if uploaded_file is not None:
+    input_sirets = pd.read_excel(uploaded_file, header=None, names = ['Sirets'])
+    input_sirets = input_sirets['Sirets'].tolist()
     
+    if len(input_sirets) ==0:
+        st.success("Veuillez mettre des codes SIRET dans le fichier")
     
-    
-            
-            
-    selected_index = [i.replace('dynamic_checkbox_','') for i in st.session_state.keys() if i.startswith('dynamic_checkbox_') and st.session_state[i]]
-    
-    if 'selected_attributes' not in st.session_state.keys():
-        st.session_state['selected_attributes'] = selected_index
     else:
-        st.session_state['selected_attributes'] = selected_index
-    
-
-
-
-def menu():
-    
-    st.header("Extraction de données à partir de codes SIRET")    
+        df_final = pd.DataFrame(informations, columns=['Attributs'])
+        
+        for siret in input_sirets:
+            siret = str(siret)
+            if siret != "" :
+                try:
+                    # Récupération des données et retraitement pour les avoir au format dataframe
+                    dict_data = flatten_dict(api.siret(siret).get())
+                    df_siret = pd.DataFrame({'libelles' : dict_data.keys(), siret : dict_data.values()})
+                    df_siret = df_siret[~df_siret.libelles.isin(['header_statut', 'header_message', 'etablissement_periodesEtablissement', 'etablissement_nombrePeriodesEtablissement'])]
+                    df_siret = df_siret[df_siret.libelles.isin(libelles)]
+                    # Jointure pour récupérer les bons noms des champs, ou les attributs
+                    df_siret = pd.merge(df_siret, mapping, on = 'libelles', how='left',indicator=True)
+                    df_siret = df_siret[["Attributs", siret]]
+                    df_siret = df_siret.astype(str)
+                    
+                    # Affichage du résultat en cas de réussite
+                    name_company = dict_data['etablissement_uniteLegale_denominationUniteLegale']
+                    st.success(f'Le SIRET {siret} correspond à {name_company}')
+                    
+                    hide_table_row_index = """
+                    <style>
+                    thead tr th:first-child {display:none}
+                    tbody th {display:none}
+                    </style>
+                    """
+                    st.markdown(hide_table_row_index, unsafe_allow_html=True)
+            
+                    df_final = pd.merge(df_final, df_siret, on=["Attributs"])
+                    df_final.replace(to_replace=['None'], value=np.nan, inplace=True)
+                    
+                except :
+                    st.warning(f"Le SIRET {siret} n'a pas été reconnu")
         
         
-    siret = st.text_input('Entrez le code SIRET', value = '48347855800057')
-    
-    if siret != "" :
-        api = ApiInsee(
-            key = "SvyV5c0YqjcXJXEbVYCAh2ZVfCYa",
-            secret = "OzG82MAf_oL864QWoS1SCf4pmPwa")
-        
-        try:
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            df_final.to_excel(writer, sheet_name='Resultat', index=False)
             
-            dict_data = flatten_dict(api.siret(siret).get())
+            worksheet = writer.sheets['Resultat']  # pull worksheet object
+            for idx, col in enumerate(df_final):  # loop through all columns
+                series = df_final[col]
+                max_len = max((
+                    series.astype(str).map(len).max(),  # len of largest item
+                    len(str(series.name))  # len of column name/header
+                    )) + 1  # adding a little extra space
+                worksheet.set_column(idx, idx, max_len)
             
-            df_data = pd.DataFrame({'libelles' : dict_data.keys(), 'Resultat' : dict_data.values()})
-          
-            df_data = df_data[df_data['Resultat'].notnull()]
+            writer.save()
             
-            df_data = df_data[~df_data.libelles.isin(['header_statut', 'header_message', 'etablissement_periodesEtablissement', 'etablissement_nombrePeriodesEtablissement'])]
-            
-            df_data = pd.merge(df_data, mapping, on = 'libelles', how='left',indicator=True)
-            df_data['Attribut'] = np.where(df_data['_merge']== 'both', df_data['infos'], df_data['libelles'])
-            df_data = df_data[['Attribut', 'Resultat', 'index']]
-            
-            df_data = df_data.sort_values(by=['index'])
-            df_data = df_data.astype(str)
-            
-            list_util = [int(i) for i in st.session_state['selected_attributes']]
-            n = len(df_data.index)
-            
-            list_util = [i for i in list_util if i<n]
-            
-            df_data = df_data.iloc[list_util,:]
-            df_data = df_data[['Attribut', 'Resultat']]
-            
-            st.success('Ci-dessous les données concernant cette entreprise :')
-            
-            hide_table_row_index = """
-            <style>
-            thead tr th:first-child {display:none}
-            tbody th {display:none}
-            </style>
-            """
-            st.markdown(hide_table_row_index, unsafe_allow_html=True)
+            st.download_button(
+                label="Download Excel worksheets",
+                data=buffer,
+                file_name="Resultats_SIRET.xlsx",
+                mime="application/vnd.ms-excel")
 
-            st.table(df_data)
-        
-        except :
-            st.warning("Ce code n'a pas été reconnu")
-
-
-page_names_to_funcs = {
-    "Menu": menu,
-    "Réglages": reglages,
-}
-
-selected_page = st.sidebar.selectbox("Sélectionnez une page", page_names_to_funcs.keys())
-
-page_names_to_funcs[selected_page]()
 
