@@ -154,7 +154,7 @@ mapping['index'] = mapping.index
 
 api = ApiInsee(
     key = st.secrets["key"],
-    secret = st.secrets["secret"]")
+    secret = st.secrets["secret"])
 with st.sidebar.container():
     image = Image.open(os.path.join(os.getcwd(), 'digital.factory.png'))
 
