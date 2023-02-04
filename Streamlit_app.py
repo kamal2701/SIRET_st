@@ -153,8 +153,8 @@ mapping = pd.DataFrame({'libelles' : libelles, 'Attributs' : informations})
 mapping['index'] = mapping.index
 
 api = ApiInsee(
-    key = "SvyV5c0YqjcXJXEbVYCAh2ZVfCYa",
-    secret = "OzG82MAf_oL864QWoS1SCf4pmPwa")
+    key = st.secrets["key"],
+    secret = st.secrets["secret"]")
 with st.sidebar.container():
     image = Image.open(os.path.join(os.getcwd(), 'digital.factory.png'))
 
