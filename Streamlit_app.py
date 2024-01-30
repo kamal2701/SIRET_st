@@ -1,6 +1,7 @@
 # Kamal QUAZBARY
+# 2023
 
-# Pour plus d'informations, lire le fichier texte Streamlit app - Mode d'emploi.docx
+
 # streamlit run Streamlit_app.py
 
 import streamlit as st
@@ -155,10 +156,7 @@ mapping['index'] = mapping.index
 api = ApiInsee(
     key = st.secrets["key"],
     secret = st.secrets["secret"])
-with st.sidebar.container():
-    image = Image.open(os.path.join(os.getcwd(), 'digital.factory.png'))
 
-    st.image(image)
     
 
 st.sidebar.write('Application construite autour des codes SIRET')
